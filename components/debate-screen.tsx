@@ -55,7 +55,7 @@ export default function DebateScreen() {
       const timer = setTimeout(() => {
         const fullContent = messages[messages.length - 1].content
         setDisplayedContent(fullContent.slice(0, displayedContent.length + 1))
-      }, 30)
+      }, 15)
       return () => clearTimeout(timer)
     } else if (isTyping) {
       setIsTyping(false)
@@ -249,7 +249,7 @@ export default function DebateScreen() {
   return (
     <div className="min-h-screen gradient-bg flex flex-col">
       {/* Header */}
-      <div className="border-b border-border/50 bg-card/80 backdrop-blur-sm">
+      <div className="sticky top-0 z-50 border-b border-border/50 bg-card/80 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto p-4 flex items-center justify-between">
           <Button variant="ghost" size="sm" onClick={() => router.push("/")} className="text-foreground hover:bg-secondary">
             <ArrowLeft className="w-4 h-4 mr-2" /> 돌아가기
@@ -298,7 +298,7 @@ export default function DebateScreen() {
                     </div>
                   )}
                   <Card
-                    className={`p-4 ${
+                    className={`p-4 message-bubble ${
                       message.side === "pro"
                         ? "bg-pro/10 border-pro/30"
                         : message.side === "con"
@@ -319,8 +319,21 @@ export default function DebateScreen() {
             )
           })}
           {isGenerating && (
-            <div className="flex justify-center py-6">
-              <div className="text-sm text-muted-foreground animate-pulse">AI가 응답을 생성하고 있습니다...</div>
+            <div className={`flex gap-4 ${currentTurn % 2 === 1 ? "flex-row-reverse" : ""}`}>
+              <Avatar className={`shrink-0 ${currentTurn % 2 === 1 ? "bg-con/20" : "bg-pro/20"}`}>
+                <AvatarFallback className={currentTurn % 2 === 1 ? "text-con" : "text-pro"}>
+                  {currentTurn % 2 === 1 ? "반" : "찬"} 
+                </AvatarFallback>
+              </Avatar>
+              <Card
+                className={`p-4 loading-bubble ${currentTurn % 2 === 1 ? "bg-con/10 border-con/30" : "bg-pro/10 border-pro/30"}`}
+              >
+                <p className="text-foreground leading-relaxed">
+                  <span className="loading-dot">·</span>
+                  <span className="loading-dot ml-1">·</span>
+                  <span className="loading-dot ml-1">·</span>
+                </p>
+              </Card>
             </div>
           )}
           <div ref={messagesEndRef} />

@@ -150,3 +150,67 @@
   background-size: 200% 200%;
   animation: gradient-shift 15s ease infinite;
 }
+
+/* Added typewriter animation - faster speed */
+@keyframes typewriter {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes typewriter-cursor {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Added message bubble animations - fade in and scale up */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Added loading bubble animation */
+@keyframes loadingBubble {
+  0%,
+  60%,
+  100% {
+    opacity: 0.4;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+.message-bubble {
+  animation: fadeInScale 0.3s ease-out;
+}
+
+.loading-bubble {
+  animation: fadeInScale 0.3s ease-out;
+}
+
+.loading-dot {
+  display: inline-block;
+  animation: loadingBubble 1.4s infinite;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}

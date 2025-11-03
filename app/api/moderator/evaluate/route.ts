@@ -1,17 +1,11 @@
 export const runtime = "nodejs"
 export const maxDuration = 60
 
-type SideSummary = {
-  항목: string
-  핵심주장: string
-  주요논거: string
-  뒷받침사례: string
-  최종변론: string
-}
+import { sql } from "@/lib/db"
 
-async function callGemini(apiKey: string, prompt: string, maxOutputTokens = 800, model = "gemini-2.5-flash") {
+async function callGemini(apiKey: string, prompt: string, maxOutputTokens = 800, model = "gemini-2.0-flash") {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 30000) // ⏱ 30초로 연장
+  const timeout = setTimeout(() => controller.abort(), 25000)
 
   try {
     const res = await fetch(
@@ -41,100 +35,72 @@ async function callGemini(apiKey: string, prompt: string, maxOutputTokens = 800,
   }
 }
 
-function extractAndParseJson(rawText: string) {
-  if (!rawText || typeof rawText !== "string") return null
-  const match = rawText.match(/\{[\s\S]*\}/)
-  if (!match) return null
-
-  try {
-    const cleaned = match[0]
-      .replace(/(\r\n|\n|\r)/gm, " ")
-      .replace(/\t/g, " ")
-      .replace(/,\s*}/g, "}")
-      .replace(/[“”]/g, '"')
-      .replace(/[‘’]/g, "'")
-
-    return JSON.parse(cleaned)
-  } catch {
-    console.warn("extractAndParseJson failed:", rawText.slice(0, 100))
-    return null
-  }
-}
-
-// ✅ 토론 로그 저장 구조 (세션별, 진영별)
-const debateLogs: Record<
-  string,
-  { pro: string[]; con: string[]; all: string[] }
-> = {}
-
-async function generateEvaluation(
-  apiKey: string,
-  topic: string,
-  proSummary: SideSummary,
-  conSummary: SideSummary
-) {
-  // ✅ 완전히 비어있는 경우 AI 호출 방지
-  const allEmpty =
-    !proSummary.핵심주장 && !conSummary.핵심주장 &&
-    !proSummary.주요논거 && !conSummary.주요논거
-
-  if (allEmpty) {
-    return { morePersuasive: "판단불가", reasoning: "요약 데이터가 부족하여 평가할 수 없습니다." }
-  }
-
+async function evaluateDebate(apiKey: string, messages: string[]) {
   const prompt = `
-당신은 공정한 토론 사회자입니다.
-주제 "${topic}"에 대한 두 입장을 분석하여 더 설득력 있는 쪽을 판단하세요.
-반드시 아래 JSON 형식으로만 답변하세요.
+당신은 토론 사회자입니다.
+다음은 찬성/반대 양측의 대화 기록입니다.
+각 발언을 참고하여 토론 전반에 대한 평가와 피드백을 JSON 형식으로 작성하세요.
+JSON 외에는 출력하지 마세요.
 
 {
-  "morePersuasive": "찬성" 또는 "반대" 또는 "판단불가",
-  "reasoning": "2문장 이내 이유"
+  "전체평가": "토론의 강점과 약점, 논리적 완결성 평가 3~4문장",
+  "찬성측평가": "찬성측 주장의 명확성, 근거, 사례 평가 2~3문장",
+  "반대측평가": "반대측 주장의 명확성, 근거, 사례 평가 2~3문장",
+  "추천조언": "다음 토론을 위한 구체적 조언 1~2문장"
 }
 
-찬성 요약:
-${JSON.stringify(proSummary, null, 2)}
-
-반대 요약:
-${JSON.stringify(conSummary, null, 2)}
+대화 기록:
+${messages.length > 0 ? messages.join("\n---\n") : "발언 없음"}
 `.trim()
 
-  const res = await callGemini(apiKey, prompt, 600)
-  if (res.ok && res.text) {
-    const parsed = extractAndParseJson(res.text)
-    if (parsed) {
-      // 🧹 후처리: 문장형 응답 교정
-      let mp = parsed.morePersuasive?.replace(/[^찬성반대판단불가]/g, "") || "판단불가"
-      if (!["찬성", "반대", "판단불가"].includes(mp)) mp = "판단불가"
-
-      return {
-        morePersuasive: mp,
-        reasoning: parsed.reasoning || "AI가 이유를 제공하지 않았습니다.",
-      }
-    }
-  }
-  return { morePersuasive: "판단불가", reasoning: "평가 생성 실패" }
+  const res = await callGemini(apiKey, prompt, 1000)
+  return res
 }
 
 export async function POST(req: Request) {
   try {
-    const { topic, proSummary, conSummary } = await req.json()
-
-    if (!proSummary || !conSummary) {
-      return Response.json({ error: "Missing summaries" }, { status: 400 })
+    const { debateId } = await req.json()
+    if (!debateId) {
+      return new Response(JSON.stringify({ error: "Missing debateId" }), { status: 400 })
     }
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
-      return Response.json({ error: "Missing GEMINI_API_KEY" }, { status: 500 })
+      return new Response(JSON.stringify({ error: "Missing GEMINI_API_KEY" }), { status: 500 })
     }
 
-    const evaluation = await generateEvaluation(apiKey, topic || "주제 미정", proSummary, conSummary)
-    console.debug("[moderator-evaluate]", evaluation)
+    // DB에서 debateId로 메시지 조회
+    const debate = await sql`
+      SELECT messages
+      FROM debates
+      WHERE id = ${debateId}
+    ` as { messages: string }[]
 
-    return Response.json(evaluation, { status: 200 })
+    if (!debate?.[0]?.messages) {
+      return new Response(JSON.stringify({ error: "Debate not found" }), { status: 404 })
+    }
+
+    // messages 안전하게 처리
+    let messagesObj: { side: string; content: string }[]
+    if (typeof debate[0].messages === "string") {
+      messagesObj = JSON.parse(debate[0].messages)
+    } else {
+      messagesObj = debate[0].messages
+    }
+
+    const messagesContent = messagesObj.map(
+      (m) =>
+        `${m.side === "pro" ? "찬성" : m.side === "con" ? "반대" : "사용자"}: ${m.content}`
+    )
+    
+    const evaluation = await evaluateDebate(apiKey, messagesContent)
+
+    return new Response(JSON.stringify({ evaluation }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
   } catch (e: any) {
-    console.error("Error in /evaluate:", e)
-    return Response.json({ morePersuasive: "판단불가", reasoning: "서버 오류 발생" }, { status: 500 })
+    console.error("Error in moderator evaluate route:", e)
+    return new Response(JSON.stringify({ error: e?.message || "Unknown error" }), { status: 500 })
   }
 }

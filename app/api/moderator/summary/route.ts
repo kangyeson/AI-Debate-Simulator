@@ -1,6 +1,8 @@
 export const runtime = "nodejs"
 export const maxDuration = 60
 
+import { sql } from "@/lib/db"
+
 type SideSummary = {
   항목: string
   핵심주장: string
@@ -17,7 +19,7 @@ const DEFAULT_SIDE: SideSummary = {
   최종변론: "",
 }
 
-async function callGemini(apiKey: string, prompt: string, maxOutputTokens = 800, model = "gemini-2.5-flash") {
+async function callGemini(apiKey: string, prompt: string, maxOutputTokens = 800, model = "gemini-2.0-flash") {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 25000)
 
@@ -98,38 +100,66 @@ ${messages.length > 0 ? messages.join("\n---\n") : "발언 없음"}
   return { ...DEFAULT_SIDE }
 }
 
-
-// ✅ 1단계: 요약만 수행
 export async function POST(req: Request) {
   try {
-    const { topic, messages, proCharacter, conCharacter } = await req.json();
-    if (!topic || !messages || !Array.isArray(messages)) {
-      return new Response(JSON.stringify({ error: "Invalid request" }), { status: 400 });
+    const { debateId, proCharacter, conCharacter } = await req.json()
+    if (!debateId) {
+      return new Response(JSON.stringify({ error: "debateId is required" }), { status: 400 })
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "Missing GEMINI_API_KEY" }), { status: 500 });
+      return new Response(JSON.stringify({ error: "Missing GEMINI_API_KEY" }), { status: 500 })
     }
 
-    const proMessages = messages.filter((m: any) => m.side === "pro").map((m: any) => m.content);
-    const conMessages = messages.filter((m: any) => m.side === "con").map((m: any) => m.content);
+    // ✅ DB에서 debateId로 messages(JSONB) 조회
+    const debate = (await sql`
+      SELECT messages
+      FROM debates
+      WHERE id = ${debateId}
+    `) as { messages: string }[]
+
+    if (!debate || debate.length === 0) {
+      return new Response(JSON.stringify({ error: "Debate not found" }), { status: 404 })
+    }
+
+    // JSON 문자열을 배열로 변환
+    let messages: { side: "pro" | "con" | "user"; content: string }[] = [];
+    try {
+      if (typeof debate[0].messages === "string") {
+        messages = JSON.parse(debate[0].messages);
+      } else if (Array.isArray(debate[0].messages)) {
+        messages = debate[0].messages;
+      } else {
+        console.warn("Unexpected messages format:", debate[0].messages);
+      }
+    } catch (err) {
+      console.error("Failed to parse messages:", err);
+      messages = [];
+    }
+    
+
+    // 이제 filter 사용 가능
+    const proMessages = messages.filter((m) => m.side === "pro").map((m) => m.content)
+    const conMessages = messages.filter((m) => m.side === "con").map((m) => m.content)
+
 
     const [proSummary, conSummary] = await Promise.all([
       summarizeSide(apiKey, "찬성", proMessages, proCharacter),
       summarizeSide(apiKey, "반대", conMessages, conCharacter),
-    ]);
+    ])
 
     const result = {
-      topic: topic || "",
       pro: { ...DEFAULT_SIDE, ...proSummary },
       con: { ...DEFAULT_SIDE, ...conSummary },
-    };
+    }
 
-    console.debug("[moderator-summary] result:", JSON.stringify(result));
-    return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" }, });
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
   } catch (e: any) {
-    console.error("Error in moderator summary route:", e);
-    return new Response(JSON.stringify({ error: e?.message || "Unknown error" }), { status: 500 });
+    console.error("Error in moderator summary route:", e)
+    return new Response(JSON.stringify({ error: e?.message || "Unknown error" }), { status: 500 })
   }
 }

@@ -19,6 +19,9 @@ interface SummaryData {
 }
 
 interface EvaluationData {
+  overall: string
+  pro: string
+  con: string
   morePersuasive: string
   reasoning: string
 }
@@ -81,15 +84,17 @@ export default function ResultsScreen() {
   
 
   // ✅ 평가 생성 (버튼 클릭 시)
+  // ✅ 평가 생성 (버튼 클릭 시)
   async function handleShowEvaluation() {
     if (!summaryData) return
     setIsLoadingEvaluation(true)
+
     try {
       const res = await fetch("/api/moderator/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          debateId, // debateId 기반으로 평가
+          debateId,
           proSummary: {
             핵심주장: summaryData.proMain,
             주요논거: summaryData.proReasoning,
@@ -108,13 +113,21 @@ export default function ResultsScreen() {
       if (!res.ok) throw new Error("Failed to fetch evaluation")
 
       const data = await res.json()
+
+      // ✅ 영어 키 기준으로 안전하게 매핑
       setEvaluation({
+        overall: data?.overall ?? "평가 없음",
+        pro: data?.pro ?? "",
+        con: data?.con ?? "",
         morePersuasive: data?.morePersuasive ?? "판단불가",
         reasoning: data?.reasoning ?? "평가 생성 실패",
       })
     } catch (err) {
       console.error("Error loading evaluation:", err)
       setEvaluation({
+        overall: "평가 생성 실패",
+        pro: "",
+        con: "",
         morePersuasive: "판단불가",
         reasoning: "평가 생성 실패",
       })
@@ -122,6 +135,7 @@ export default function ResultsScreen() {
       setIsLoadingEvaluation(false)
     }
   }
+
 
   const handleRestart = () => {
     router.push("/")
@@ -205,14 +219,58 @@ export default function ResultsScreen() {
 
         {/* ✅ 평가 결과 표시 */}
         {evaluation && (
-          <Card className="p-8 space-y-6 backdrop-blur-sm bg-card/80 border-border/50">
-            <h2 className="text-xl font-semibold text-foreground">AI 사회자 평가</h2>
-            <div className="prose prose-invert max-w-none text-foreground/90 leading-relaxed whitespace-pre-wrap">
-              {evaluation.morePersuasive} 측이 더 설득력 있음
-              {"\n"}이유: {evaluation.reasoning}
+          <Card className="p-8 space-y-6 backdrop-blur-sm bg-card/80 shadow-[0_0_20px] shadow-primary/30 border-border/50">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-foreground">AI 사회자 평가</h2>
+              <span className="px-3 py-1 text-sm rounded-full bg-primary/20 text-primary font-medium">
+                토론 종합 리포트
+              </span>
             </div>
+
+            {/* 전체 평가 */}
+            <section className="space-y-3">
+              <h3 className="text-lg font-semibold text-primary">🧭 전체 평가</h3>
+              <p className="text-foreground/90 leading-relaxed">
+                {evaluation.overall}
+              </p>
+            </section>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* 찬성측 평가 */}
+              <section className="p-4 rounded-xl bg-foreground/5 border border-border/30">
+                <h4 className="text-base font-semibold text-green-400 mb-2">찬성측 평가</h4>
+                <p className="text-foreground/90 whitespace-pre-line">
+                  {evaluation.pro}
+                </p>
+              </section>
+
+              {/* 반대측 평가 */}
+              <section className="p-4 rounded-xl bg-foreground/5 border border-border/30">
+                <h4 className="text-base font-semibold text-red-400 mb-2">반대측 평가</h4>
+                <p className="text-foreground/90 whitespace-pre-line">
+                  {evaluation.con}
+                </p>
+              </section>
+            </div>
+
+            {/* 설득력 있는 주장 */}
+            <section className="space-y-3">
+              <h3 className="text-lg font-semibold text-yellow-400">🏆 설득력 있는 주장</h3>
+              <p className="text-foreground/90">
+                {evaluation.morePersuasive}
+              </p>
+            </section>
+
+            {/* 선정 이유 */}
+            <section className="space-y-3">
+              <h3 className="text-lg font-semibold text-blue-400">📋 선정 이유</h3>
+              <p className="text-foreground/90 whitespace-pre-line">
+                {evaluation.reasoning}
+              </p>
+            </section>
           </Card>
         )}
+
 
         {/* 하단 버튼 */}
         <div className="flex flex-wrap gap-3 justify-center">

@@ -27,8 +27,7 @@ export default function ResultsScreen() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const topic = searchParams.get("topic") || ""
-  const messagesJson = searchParams.get("messages") || "[]"
+  const debateId = searchParams.get("debateId") || ""
   const proCharacter = searchParams.get("proCharacter") || "찬성"
   const conCharacter = searchParams.get("conCharacter") || "반대"
   const proStance = searchParams.get("proStance") || "찬성"
@@ -39,44 +38,27 @@ export default function ResultsScreen() {
   const [isLoadingSummary, setIsLoadingSummary] = useState(true)
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState(false)
 
-  // ✅ 안전한 디코딩
-  function decodeURIComponentSafe(str: string) {
-    try {
-      return decodeURIComponent(str)
-    } catch {
-      return str
-    }
-  }
-
-  // ✅ 안전한 JSON 파싱
-  function safeJsonParse(str: string) {
-    try {
-      return JSON.parse(str)
-    } catch {
-      return []
-    }
-  }
-
-  // ✅ 페이지 진입 시 요약 요청
+  // 페이지 진입 시 요약 요청
   useEffect(() => {
+    if (!debateId) {
+      console.error("debateId가 없습니다.")
+      setIsLoadingSummary(false)
+      return
+    }
+  
     async function fetchModeratorSummary() {
       setIsLoadingSummary(true)
       try {
-        const decoded = decodeURIComponentSafe(messagesJson)
-        const messages = safeJsonParse(decoded)
-
         const res = await fetch("/api/moderator/summary", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topic, messages, proCharacter, conCharacter }),
+          body: JSON.stringify({ debateId, proCharacter, conCharacter }),
         })
-
         if (!res.ok) throw new Error("Failed to fetch moderator summary")
-
+  
         const data = await res.json()
-
         setSummaryData({
-          topic: data.topic || topic,
+          topic: data.topic || "토론 주제 없음",
           proMain: data.pro?.핵심주장 || "",
           proReasoning: data.pro?.주요논거 || "",
           proExample: data.pro?.뒷받침사례 || "",
@@ -92,9 +74,9 @@ export default function ResultsScreen() {
         setIsLoadingSummary(false)
       }
     }
-
+  
     fetchModeratorSummary()
-  }, [topic, messagesJson, proCharacter, conCharacter])
+  }, [debateId, proCharacter, conCharacter])  
 
   
 
@@ -107,7 +89,7 @@ export default function ResultsScreen() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          topic,
+          debateId, // debateId 기반으로 평가
           proSummary: {
             핵심주장: summaryData.proMain,
             주요논거: summaryData.proReasoning,
@@ -127,8 +109,8 @@ export default function ResultsScreen() {
 
       const data = await res.json()
       setEvaluation({
-        morePersuasive: data.morePersuasive || "판단불가",
-        reasoning: data.reasoning || "평가 생성 실패",
+        morePersuasive: data?.morePersuasive ?? "판단불가",
+        reasoning: data?.reasoning ?? "평가 생성 실패",
       })
     } catch (err) {
       console.error("Error loading evaluation:", err)

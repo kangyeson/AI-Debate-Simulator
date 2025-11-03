@@ -43,11 +43,13 @@ export default function DebateScreen() {
   const [showInterventionInput, setShowInterventionInput] = useState(false)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [isDebateComplete, setIsDebateComplete] = useState(false)
+  const [debateId, setDebateId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const interventionInputRef = useRef<HTMLTextAreaElement>(null)
 
   const progress = (currentTurn / maxTurns) * 100
 
+  // 타이핑 애니메이션
   useEffect(() => {
     if (isTyping && displayedContent.length < messages[messages.length - 1]?.content.length) {
       const timer = setTimeout(() => {
@@ -60,12 +62,14 @@ export default function DebateScreen() {
     }
   }, [displayedContent, isTyping, messages])
 
+  // Intervention input focus
   useEffect(() => {
     if (showInterventionInput && interventionInputRef.current) {
       interventionInputRef.current.focus()
     }
   }, [showInterventionInput])
 
+  // AI 응답 생성
   const generateAIResponse = async (side: "pro" | "con", controller: AbortController) => {
     setIsGenerating(true)
     try {
@@ -79,12 +83,12 @@ export default function DebateScreen() {
           style,
           conversationHistory: messages,
           userIntervention: userIntervention || null,
-
+          debateId, // 기존 debateId 전달
           turn: {
-            index: currentTurn + 1,              // 지금 생성될 턴의 번호
-            total: maxTurns,                     // 총 턴 수
-            isFinal: currentTurn + 1 === maxTurns, // 이번이 마지막 턴인지 여부
-            speaker: side,                       // 이번 발언자
+            index: currentTurn + 1,
+            total: maxTurns,
+            isFinal: currentTurn + 1 === maxTurns,
+            speaker: side,
           },
         }),
         signal: controller.signal,
@@ -92,19 +96,24 @@ export default function DebateScreen() {
 
       if (!response.ok) throw new Error("Response failed")
       const data = await response.json()
+
+      // 최초 debateId 저장
+      if (!debateId && data.debateId) setDebateId(data.debateId)
+
       return data.text
     } catch (error: any) {
       if (error.name === "AbortError") {
-        console.log("[v0] AI response generation cancelled by user")
+        console.log("[Debate] AI response generation cancelled by user")
         return null
       }
-      console.error("[v0] Error generating AI response:", error)
+      console.error("[Debate] Error generating AI response:", error)
       return "죄송합니다. 응답을 생성하는 중 오류가 발생했습니다."
     } finally {
       setIsGenerating(false)
     }
   }
 
+  // 턴 진행
   useEffect(() => {
     if (isPlaying && currentTurn < maxTurns && !isTyping && !isGenerating) {
       const timer = setTimeout(async () => {
@@ -116,7 +125,6 @@ export default function DebateScreen() {
         const content = await generateAIResponse(side, controller)
 
         if (content === null) {
-          // User cancelled the generation
           setShowInterventionInput(true)
           return
         }
@@ -136,7 +144,6 @@ export default function DebateScreen() {
           setShowInterventionInput(true)
         }
       }, 1000)
-
       return () => clearTimeout(timer)
     } else if (currentTurn >= maxTurns && !isTyping && !isGenerating) {
       setIsPlaying(false)
@@ -146,11 +153,10 @@ export default function DebateScreen() {
   }, [
     isPlaying,
     currentTurn,
-    topic,
-    router,
+    messages,
     isTyping,
     isGenerating,
-    messages,
+    topic,
     style,
     proCharacter,
     conCharacter,
@@ -161,9 +167,7 @@ export default function DebateScreen() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, displayedContent])
 
-  const handleTogglePlay = () => {
-    setIsPlaying(!isPlaying)
-  }
+  const handleTogglePlay = () => setIsPlaying(!isPlaying)
 
   const handleSkip = async () => {
     if (currentTurn < maxTurns && !isTyping && !isGenerating) {
@@ -189,7 +193,6 @@ export default function DebateScreen() {
 
   const handleInterventionSubmit = async () => {
     if (!userIntervention.trim()) return
-
     if (abortController) {
       abortController.abort()
       setAbortController(null)
@@ -206,10 +209,7 @@ export default function DebateScreen() {
     setIsGenerating(false)
     setIsTyping(false)
     setDisplayedContent("")
-
-    setTimeout(() => {
-      setIsPlaying(true)
-    }, 500)
+    setTimeout(() => setIsPlaying(true), 500)
   }
 
   const handlePresetPrompt = (prompt: string) => {
@@ -231,42 +231,31 @@ export default function DebateScreen() {
       setIsTyping(false)
       setDisplayedContent("")
       setUserIntervention("")
-      setTimeout(() => {
-        setIsPlaying(true)
-      }, 500)
+      setTimeout(() => setIsPlaying(true), 500)
     }, 100)
   }
 
   const handleViewResults = () => {
-    router.push(
-      `/results?topic=${encodeURIComponent(topic)}&messages=${encodeURIComponent(
-        JSON.stringify(messages),
-      )}&proCharacter=${encodeURIComponent(proCharacter)}&conCharacter=${encodeURIComponent(conCharacter)}&proStance=${encodeURIComponent(proStance)}&conStance=${encodeURIComponent(conStance)}`,
-    )
+    if (!debateId) return alert("Debate ID가 없습니다.")
+      router.push(
+        `/results?debateId=${debateId}` +
+          `&proCharacter=${encodeURIComponent(proCharacter)}` +
+          `&conCharacter=${encodeURIComponent(conCharacter)}`
+      )
   }
 
-  const handleStartOver = () => {
-    router.push("/")
-  }
+  const handleStartOver = () => router.push("/")
 
   return (
     <div className="min-h-screen gradient-bg flex flex-col">
       {/* Header */}
       <div className="border-b border-border/50 bg-card/80 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto p-4 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push("/")}
-            className="text-foreground hover:bg-secondary"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            돌아가기
+          <Button variant="ghost" size="sm" onClick={() => router.push("/")} className="text-foreground hover:bg-secondary">
+            <ArrowLeft className="w-4 h-4 mr-2" /> 돌아가기
           </Button>
           <h2 className="text-lg font-semibold text-foreground text-balance text-center flex-1 px-4">{topic}</h2>
-          <div className="w-24 text-right text-sm text-muted-foreground">
-            {currentTurn}/{maxTurns} 턴
-          </div>
+          <div className="w-24 text-right text-sm text-muted-foreground">{currentTurn}/{maxTurns} 턴</div>
         </div>
         <div className="max-w-5xl mx-auto px-4 pb-3 flex gap-4 justify-center text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
@@ -289,14 +278,8 @@ export default function DebateScreen() {
           {messages.map((message, index) => {
             const isLastMessage = index === messages.length - 1
             const content = isLastMessage && isTyping ? displayedContent : message.content
-
             return (
-              <div
-                key={message.id}
-                className={`flex gap-4 ${message.side === "con" ? "flex-row-reverse" : ""} ${
-                  message.side === "user" ? "justify-center" : ""
-                }`}
-              >
+              <div key={message.id} className={`flex gap-4 ${message.side === "con" ? "flex-row-reverse" : ""} ${message.side === "user" ? "justify-center" : ""}`}>
                 {message.side !== "user" && (
                   <Avatar className={`shrink-0 ${message.side === "pro" ? "bg-pro/20" : "bg-con/20"}`}>
                     <AvatarFallback className={message.side === "pro" ? "text-pro" : "text-con"}>

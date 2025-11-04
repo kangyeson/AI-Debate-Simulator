@@ -143,8 +143,30 @@ export default function ResultsScreen() {
 
   if (isLoadingSummary || !summaryData) {
     return (
-      <div className="min-h-screen gradient-bg flex items-center justify-center">
-        <div className="text-foreground text-lg">AI 사회자가 토론 내용을 분석 중입니다...</div>
+      <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+        <div className="flex flex-col items-center justify-center space-y-6">
+          <div className="analyzing-badge p-8 rounded-full border-2 border-primary/50">
+            <svg className="floating-icon w-16 h-16 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+
+          <div className="text-center space-y-2">
+            <h2 className="text-2xl font-bold text-foreground">AI 사회자가 토론 내용을 분석 중입니다...</h2>
+            <p className="text-muted-foreground">잠시만 기다려주세요</p>
+          </div>
+
+          <div className="flex gap-2 justify-center mt-4">
+            <div className="loading-dot w-2 h-2 bg-primary rounded-full"></div>
+            <div className="loading-dot w-2 h-2 bg-primary rounded-full"></div>
+            <div className="loading-dot w-2 h-2 bg-primary rounded-full"></div>
+          </div>
+        </div>
       </div>
     )
   }

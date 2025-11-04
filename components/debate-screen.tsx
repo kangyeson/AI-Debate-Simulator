@@ -36,8 +36,6 @@ export default function DebateScreen() {
   const [messages, setMessages] = useState<Message[]>([])
   const [currentTurn, setCurrentTurn] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [displayedContent, setDisplayedContent] = useState<string>("")
-  const [isTyping, setIsTyping] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [userIntervention, setUserIntervention] = useState<string>("")
   const [showInterventionInput, setShowInterventionInput] = useState(false)
@@ -46,21 +44,10 @@ export default function DebateScreen() {
   const [debateId, setDebateId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const interventionInputRef = useRef<HTMLTextAreaElement>(null)
+  const [displayedContent, setDisplayedContent] = useState<string>("") // Declare the variable here
 
   const progress = (currentTurn / maxTurns) * 100
 
-  // 타이핑 애니메이션
-  useEffect(() => {
-    if (isTyping && displayedContent.length < messages[messages.length - 1]?.content.length) {
-      const timer = setTimeout(() => {
-        const fullContent = messages[messages.length - 1].content
-        setDisplayedContent(fullContent.slice(0, displayedContent.length + 1))
-      }, 15)
-      return () => clearTimeout(timer)
-    } else if (isTyping) {
-      setIsTyping(false)
-    }
-  }, [displayedContent, isTyping, messages])
 
   // Intervention input focus
   useEffect(() => {
@@ -115,7 +102,7 @@ export default function DebateScreen() {
 
   // 턴 진행
   useEffect(() => {
-    if (isPlaying && currentTurn < maxTurns && !isTyping && !isGenerating) {
+    if (isPlaying && currentTurn < maxTurns && !isGenerating) {
       const timer = setTimeout(async () => {
         const side = currentTurn % 2 === 0 ? "pro" : "con"
         const controller = new AbortController()
@@ -137,40 +124,27 @@ export default function DebateScreen() {
             timestamp: Date.now(),
           }
           setMessages((prev) => [...prev, newMessage])
-          setDisplayedContent("")
-          setIsTyping(true)
           setCurrentTurn((prev) => prev + 1)
           setUserIntervention("")
           setShowInterventionInput(true)
         }
       }, 1000)
       return () => clearTimeout(timer)
-    } else if (currentTurn >= maxTurns && !isTyping && !isGenerating) {
+    } else if (currentTurn >= maxTurns && !isGenerating) {
       setIsPlaying(false)
       setIsDebateComplete(true)
       setShowInterventionInput(false)
     }
-  }, [
-    isPlaying,
-    currentTurn,
-    messages,
-    isTyping,
-    isGenerating,
-    topic,
-    style,
-    proCharacter,
-    conCharacter,
-    maxTurns,
-  ])
+  }, [isPlaying, currentTurn, topic, router, isGenerating, messages, style, proCharacter, conCharacter, maxTurns])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, displayedContent])
+  }, [messages])
 
   const handleTogglePlay = () => setIsPlaying(!isPlaying)
 
   const handleSkip = async () => {
-    if (currentTurn < maxTurns && !isTyping && !isGenerating) {
+    if (currentTurn < maxTurns && !isGenerating) {
       const side = currentTurn % 2 === 0 ? "pro" : "con"
       const controller = new AbortController()
       const content = await generateAIResponse(side, controller)
@@ -183,10 +157,10 @@ export default function DebateScreen() {
           timestamp: Date.now(),
         }
         setMessages((prev) => [...prev, newMessage])
-        setDisplayedContent(content)
         setCurrentTurn((prev) => prev + 1)
         setUserIntervention("")
         setShowInterventionInput(true)
+        setDisplayedContent(content)
       }
     }
   }
@@ -207,7 +181,6 @@ export default function DebateScreen() {
     setMessages((prev) => [...prev, interventionMessage])
     setShowInterventionInput(false)
     setIsGenerating(false)
-    setIsTyping(false)
     setDisplayedContent("")
     setTimeout(() => setIsPlaying(true), 500)
   }
@@ -228,7 +201,6 @@ export default function DebateScreen() {
       setMessages((prev) => [...prev, interventionMessage])
       setShowInterventionInput(false)
       setIsGenerating(false)
-      setIsTyping(false)
       setDisplayedContent("")
       setUserIntervention("")
       setTimeout(() => setIsPlaying(true), 500)
@@ -275,10 +247,7 @@ export default function DebateScreen() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-5xl mx-auto space-y-6">
-          {messages.map((message, index) => {
-            const isLastMessage = index === messages.length - 1
-            const content = isLastMessage && isTyping ? displayedContent : message.content
-            return (
+        {messages.map((message, index) => (
               <div key={message.id} className={`flex gap-4 ${message.side === "con" ? "flex-row-reverse" : ""} ${message.side === "user" ? "justify-center" : ""}`}>
                 {message.side !== "user" && (
                   <Avatar className={`shrink-0 ${message.side === "pro" ? "bg-pro/20" : "bg-con/20"}`}>
@@ -307,17 +276,13 @@ export default function DebateScreen() {
                     }`}
                   >
                     <p className="text-foreground leading-relaxed">
-                      {message.side === "user" && (
-                        <span className="text-xs text-muted-foreground mr-2">👤 사용자:</span>
-                      )}
-                      {content}
-                      {isLastMessage && isTyping && <span className="animate-pulse">|</span>}
+                      {message.side === "user" && <span className="text-xs text-muted-foreground mr-2">👤 사용자:</span>}
+                      {message.content} 
                     </p>
                   </Card>
                 </div>
               </div>
-            )
-          })}
+          ))}
           {isGenerating && (
             <div className={`flex gap-4 ${currentTurn % 2 === 1 ? "flex-row-reverse" : ""}`}>
               <Avatar className={`shrink-0 ${currentTurn % 2 === 1 ? "bg-con/20" : "bg-pro/20"}`}>
@@ -419,7 +384,7 @@ export default function DebateScreen() {
             <div className="flex gap-2 justify-center">
               <Button
                 onClick={handleTogglePlay}
-                disabled={currentTurn >= maxTurns || isTyping || isGenerating}
+                disabled={currentTurn >= maxTurns || isGenerating}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 {isPlaying ? (
@@ -436,7 +401,7 @@ export default function DebateScreen() {
               </Button>
               <Button
                 onClick={handleSkip}
-                disabled={currentTurn >= maxTurns || isTyping || isGenerating}
+                disabled={currentTurn >= maxTurns || isGenerating}
                 variant="outline"
                 className="border-border hover:bg-secondary text-foreground"
               >

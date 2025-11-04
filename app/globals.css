@@ -214,3 +214,32 @@
 .loading-dot:nth-child(3) {
   animation-delay: 0.4s;
 }
+
+/* Added moderator analysis loading animation and pulse effect */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(74, 222, 128, 0.6);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.analyzing-badge {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.floating-icon {
+  animation: float 3s ease-in-out infinite;
+}

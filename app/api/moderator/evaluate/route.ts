@@ -3,7 +3,7 @@ export const maxDuration = 60
 
 import { sql } from "@/lib/db"
 
-async function callGemini(apiKey: string, prompt: string, maxOutputTokens = 800, model = "gemini-2.5-flash") {
+async function callGemini(apiKey: string, prompt: string, maxOutputTokens = 800, model = "gemini-2.0-flash") {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 25000)
 

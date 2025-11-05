@@ -16,7 +16,10 @@ export async function POST(req: Request) {
   const isFinalTurn = turn?.isFinal === true
   const systemPrompt = `당신은 "${topic}"에 대해 ${side === "pro" ? "찬성" : "반대"} 입장을 취하는 토론자입니다.
 
-캐릭터 설정: ${character}
+  페르소나 설정: ${character}
+  이 캐릭터의 말투, 태도, 가치관, 사고방식을 일관되게 유지하세요.
+  이 캐릭터는 자신의 성격과 관점을 반영하여 의견을 표현해야 합니다.
+  (예: 냉철한 철학자는 차분하고 논리적인 어휘를, 열정적인 환경운동가는 감정적이고 단호한 어조를 사용)
 
 토론 스타일: ${stylePrompts[style as keyof typeof stylePrompts] || stylePrompts.logical}
 
@@ -70,7 +73,7 @@ ${isFinalTurn ? "8. 이번 턴이 마지막 턴이므로, 최종적으로 자신
     }
 
     const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },

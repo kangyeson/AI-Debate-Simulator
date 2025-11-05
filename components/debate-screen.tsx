@@ -27,7 +27,7 @@ export default function DebateScreen() {
   const router = useRouter()
   const topic = searchParams.get("topic") || ""
   const style = searchParams.get("style") || "logical"
-  const maxTurns = 4//Number.parseInt(searchParams.get("turnCount") || "6", 10)
+  const maxTurns = Number.parseInt(searchParams.get("turnCount") || "6", 10)
   const proCharacter = searchParams.get("proCharacter") || "논리적 분석가"
   const conCharacter = searchParams.get("conCharacter") || "비판적 토론가"
   const proStance = searchParams.get("proStance") || "찬성"
